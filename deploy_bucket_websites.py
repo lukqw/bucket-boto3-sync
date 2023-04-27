@@ -1,7 +1,10 @@
 import json
+import pathlib
 import subprocess
 import boto3
 import os
+
+from mime_type import MIME_TYPES
 
 # aws related
 REGION = "eu-central-1"
@@ -12,6 +15,7 @@ AWS_CONFIG = {"region_name": REGION, "endpoint_url": ENDPOINT_URL}
 # website config
 WEBSITE_BUCKET_NAME_A = "website-a"
 WEBSITE_BUCKET_NAME_B = "website-b"
+
 
 def host_website_a() -> None:
     # create s3 bucket for hosting the web app
@@ -53,6 +57,7 @@ def host_website_a() -> None:
         f"S3 static website URL: http://{WEBSITE_BUCKET_NAME_A}.s3-website.localhost.localstack.cloud:4566"
     )
 
+
 def host_website_b() -> None:
     # create s3 bucket for hosting the web app
     s3 = boto3.client("s3", **AWS_CONFIG)
@@ -76,16 +81,22 @@ def host_website_b() -> None:
     }
     s3.put_bucket_policy(Bucket=WEBSITE_BUCKET_NAME_B, Policy=json.dumps(policy))
 
-    folder_path = 'web/build'
+    folder_path = "web/build"
     # Get a list of all files in the folder
+
     for subdir, dirs, files in os.walk(folder_path):
-      for file in files:
-          # Create the full path to the file
-          file_path = os.path.join(subdir, file)
-          # Create the S3 object key by removing the folder path from the file path
-          object_key = os.path.relpath(file_path, folder_path)
-          # Upload the file to S3
-          s3.upload_file(file_path, WEBSITE_BUCKET_NAME_B, object_key)
+        for file in files:
+            # Create the full path to the file
+            file_path = os.path.join(subdir, file)
+            # Create the S3 object key by removing the folder path from the file path
+            object_key = os.path.relpath(file_path, folder_path)
+
+            extra_args = {}
+            object_suffix = pathlib.Path(object_key).suffix
+            if object_suffix and (content_type := MIME_TYPES.get(object_suffix)):
+                extra_args["ContentType"] = content_type
+            # Upload the file to S3
+            s3.upload_file(file_path, WEBSITE_BUCKET_NAME_B, object_key, ExtraArgs=extra_args)
 
     # Enable static website hosting for the bucket
     s3.put_bucket_website(
@@ -100,6 +111,7 @@ def host_website_b() -> None:
     print(
         f"S3 static website URL: http://{WEBSITE_BUCKET_NAME_B}.s3-website.localhost.localstack.cloud:4566"
     )
+
 
 host_website_a()
 host_website_b()
